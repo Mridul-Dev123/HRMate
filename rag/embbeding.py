@@ -15,6 +15,6 @@ def get_embeddings(text):
     input=text,
     model="text-embedding-3-large"
 )
-
+    # 3072
     return response.data[0].embedding
 
