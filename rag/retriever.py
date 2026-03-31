@@ -119,7 +119,7 @@ def get_hybrid_retriever() -> FilteredEnsembleRetriever:
     if not api_key:
         raise ValueError("Missing GOOGLE_API_KEY in .env")
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
     faiss_path = os.path.join("rag", "faiss_index")
 
     if not os.path.exists(faiss_path):

@@ -149,7 +149,9 @@ Run this **once** (or whenever the policy changes):
 python rag_runner.py
 ```
 
-This chunks the document, generates embeddings via Google's `text-embedding-004` model, and creates both a BM25 index and a FAISS vector store locally.
+This uses a **two-stage section-aware chunking strategy** to split the policy into semantically meaningful chunks, generates embeddings via Google's `gemini-embedding-001` model, and creates both a BM25 index and a FAISS vector store locally.
+
+> The indexer prints a chunk summary so you can verify each section was captured correctly.
 
 ### 7. Start the auto-reply bot
 
@@ -198,14 +200,34 @@ The assistant is guided by the system prompt in `rag/doc/system_prompt.md`:
 
 ---
 
+## 📦 Chunking Strategy
+
+HRMate uses a **two-stage section-aware chunking** pipeline optimised for structured HR policy documents:
+
+| Stage | What It Does | Config |
+|-------|-------------|--------|
+| **Stage 1** | Splits at `Section`, triple/double newline boundaries | 2000 chars, no overlap |
+| **Stage 2** | Sub-splits any chunk still > 2000 chars | 1500 chars, 200 char overlap |
+
+**Why not basic `RecursiveCharacterTextSplitter`?**
+- The policy has clear `Section X.Y` structure — blind character splits break tables and subsections in half
+- Section-aware separators (`\nSection `, `\n\n\n`, `\n\n`) keep full policy subsections intact
+- Each chunk is enriched with **section metadata** (`section_number`, `section_title`, `subsection`) for citation
+- The "Works cited" footer is stripped before chunking since it's not policy content
+
+Result: **36 section-aligned chunks** (vs ~57 blind chunks), each mapping to a complete policy subsection.
+
+---
+
 ## 🛠️ Tech Stack
 
 | Component | Technology |
 |-----------|------------|
 | LLM | Google Gemini 2.0 Flash |
-| Embeddings | Google `text-embedding-004` |
+| Embeddings | Google `gemini-embedding-001` |
 | Vector Database | FAISS (local) |
 | Keyword Search | BM25 (via `rank_bm25`) |
+| Chunking | Two-stage section-aware (2000 → 1500 chars) |
 | Retrieval Strategy | Hybrid Ensemble (BM25 + FAISS) → LLM Reranking |
 | Agent Framework | LangChain (ReAct agent) |
 | Database | SQLite (analytics, PTO, leave requests) |
@@ -220,7 +242,8 @@ The assistant is guided by the system prompt in `rag/doc/system_prompt.md`:
 ## 📝 Notes
 
 - The polling interval is set to **2 seconds** (`POLL_INTERVAL_SECONDS` in `main.py`). Adjust as needed.
-- The chunker uses a **1,000-character chunk size** with **200-character overlap** for good context coverage.
+- The chunker uses a **two-stage section-aware strategy** — Stage 1 splits at section boundaries (2000 chars), Stage 2 sub-splits oversized chunks (1500 chars, 200 overlap).
+- Each chunk is tagged with section metadata (number + title) for precise citation in responses.
 - The hybrid retriever returns the **top 5** results per retriever, combined via Reciprocal Rank Fusion.
 - The bot only processes **UNSEEN** emails, so already-read messages are skipped.
 - All guardrails are **fail-open** on validation errors (to avoid blocking legitimate queries) but **fail-closed** on detected threats (prompt injection, abuse).
